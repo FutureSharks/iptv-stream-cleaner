@@ -1,6 +1,7 @@
 #!/usr/bin/env python3 -u
 
 import requests
+import sys
 import m3u8
 import argparse
 from termcolor import colored
@@ -42,19 +43,24 @@ def verify_video_link(url, timeout, indent=1):
     parsed_url = urlparse(url)
 
     if not parsed_url.path.endswith('.ts'):
-        raise Exception('Unsupported video file: {0}'.format(url))
+        nice_print('ERROR unsupported video file: {0}'.format(url))
+        return False
 
     try:
-        r = requests.get(url, timeout=timeout)
+        r = requests.head(url, timeout=(timeout, timeout))
     except Exception as e:
         nice_print('ERROR loading video URL: {0}'.format(str(e)[:100]), indent=indent, debug=True)
         return False
     else:
-        if r.status_code == 200 and 'Content-Type' in r.headers and 'video' in r.headers['Content-Type']:
+        video_stream = 'Content-Type' in r.headers and ('video' in r.headers['Content-Type'] or 'octet-stream' in r.headers['Content-Type'])
+        if r.status_code != 200:
+            nice_print('ERROR {0} video URL'.format(r.status_code, indent=indent, debug=True))
+            return False
+        elif video_stream:
             nice_print('OK loading video data', indent=indent, debug=True)
             return True
         else:
-            nice_print('ERROR loading video data', indent=indent, debug=True)
+            nice_print('ERROR unknown URL: {0}'.format(url, indent=indent, debug=True))
             return False
 
 
@@ -62,14 +68,19 @@ def verify_playlist_link(url, timeout, indent=1):
     '''
     '''
     nice_print('Loading playlist: {0}'.format(url), indent=indent, debug=True)
+
+    if indent > 6:
+        nice_print('ERROR nested playlist too deep', indent=indent)
+        return False
+
     try:
         m3u8_obj = m3u8.load(url, timeout=timeout)
     except Exception as e:
         nice_print('ERROR loading playlist: {0}'.format(str(e)[:100]), indent=indent, debug=True)
         return False
 
-    for next_playlist in m3u8_obj.data['playlists']:
-        nested_url = '{0}{1}'.format(m3u8_obj.base_uri, next_playlist['uri'])
+    for nested_playlist in m3u8_obj.data['playlists']:
+        nested_url = '{0}{1}'.format(m3u8_obj.base_uri, nested_playlist['uri'])
         return verify_playlist_link(nested_url, timeout=timeout, indent=indent+1)
 
     for segment in m3u8_obj.data['segments']:
@@ -108,8 +119,26 @@ def verify_playlist_item(item, timeout):
             return False
 
     else:
-        nice_print('ERROR Unsupported URL: {0}'.format(item['url'], indent))
-        return False
+        try:
+            r = requests.head(item['url'], timeout=(timeout, timeout))
+        except Exception as e:
+            nice_print('ERROR loading URL: {0}'.format(str(e)[:100]), indent=indent, debug=True)
+            return False
+        else:
+            video_stream = 'Content-Type' in r.headers and ('video' in r.headers['Content-Type'] or 'octet-stream' in r.headers['Content-Type'])
+            playlist_link = 'Content-Type' in r.headers and 'x-mpegurl' in r.headers['Content-Type']
+
+            if r.status_code != 200:
+                nice_print('ERROR {0} loading URL: {1}'.format(r.status_code, item['url']), indent=indent, debug=True)
+                return False
+            elif video_stream:
+                nice_print('OK loading video data', indent=indent, debug=True)
+                return True
+            elif playlist_link:
+                return verify_playlist_link(item['url'], timeout, indent + 1)
+            else:
+                nice_print('ERROR unknown URL: {0}'.format(item['url']), indent=indent, debug=True)
+                return False
 
 
 def filter_streams(m3u_files, timeout):
@@ -119,12 +148,15 @@ def filter_streams(m3u_files, timeout):
     playlist_items = []
 
     for m3u_file in m3u_files:
-        with open(m3u_file) as f:
-            content = f.readlines()
-            content = [x.strip() for x in content]
+        try:
+            with open(m3u_file) as f:
+                content = f.readlines()
+                content = [x.strip() for x in content]
+        except IsADirectoryError:
+            continue
 
-        if content[0] != '#EXTM3U':
-            raise Exception('Invalid file, no EXTM3U header')
+        if content[0] != '#EXTM3U' and content[0].encode("ascii", "ignore").decode("utf-8").strip() != '#EXTM3U':
+            raise Exception('Invalid file, no EXTM3U header in "{0}"'.format(m3u_file))
 
         url_indexes = [i for i, s in enumerate(content) if s.startswith('http')]
 
@@ -146,7 +178,11 @@ def filter_streams(m3u_files, timeout):
 if __name__ == '__main__':
     args = parse_arguments()
 
-    filtered_playlist_items = filter_streams(args.input_file, args.timeout)
+    try:
+        filtered_playlist_items = filter_streams(args.input_file, args.timeout)
+    except KeyboardInterrupt:
+        print('Exiting')
+        sys.exit(1)
 
     if len(filtered_playlist_items) > 0 and args.output_file:
         print('Writing to {0}'.format(args.output_file))

@@ -1,6 +1,8 @@
 # IPTV Stream cleaner
 
-A simply python script to filter out bad or non-functioning video streams from IPTV playlist files. It will check each playlist item, its video stream links and any nested playlist items.
+Have you tried to download IPTV playlists only to find that a majority of the streams don't work? It's super annoying.
+
+Here is a simply python script to filter out bad or non-functioning video streams from IPTV playlist files. It will check each playlist item, its video stream links and any nested playlist items.
 
 It can also write a new playlist file containing the good streams.
 
@@ -12,7 +14,7 @@ AF: KTV PLUS | https://svs.itworkscdn.net/ktvpluslive/kplus.smil/playlist.m3u8
   OK playlist data
 AF: ANN | http://ns8.indexforce.com:1935/ann/ann/playlist.m3u8
   OK playlist data
-AF: MEDICAL | http://egyman.net:1978/live/180118/180118/6727.m3u8
+DE: MEDICAL | http://egyman.net:1978/live/180118/180118/6727.m3u8
   ERROR playlist data
 UK | 5 USA | http://vip.groupiptv.com:7000/live/janna1/janna1/3480.ts
   ERROR video data
