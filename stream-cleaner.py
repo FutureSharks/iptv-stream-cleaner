@@ -35,7 +35,7 @@ def nice_print(message, colour=None, indent=0, debug=False):
 
 def verify_video_link(url, timeout, indent=1):
     '''
-    Verfifies a video stream link works
+    Verifies a video stream link works
     '''
     nice_print('Loading video: {0}'.format(url), indent=indent, debug=True)
 
@@ -64,7 +64,7 @@ def verify_video_link(url, timeout, indent=1):
             return False
 
 
-def verify_playlist_link(url, timeout, indent=1):
+def verify_playlist_link(url, timeout, indent=1, check_first_N_only=5):
     '''
     '''
     nice_print('Loading playlist: {0}'.format(url), indent=indent, debug=True)
@@ -97,6 +97,7 @@ def verify_playlist_link(url, timeout, indent=1):
         nested_url = '{0}{1}'.format(m3u8_obj.base_uri, nested_playlist['uri'])
         return verify_playlist_link(nested_url, timeout=timeout, indent=indent+1)
 
+    counter=0
     for segment in m3u8_obj.data['segments']:
         if segment['uri'].startswith(('https://', 'http://')):
             url = segment['uri']
@@ -104,7 +105,13 @@ def verify_playlist_link(url, timeout, indent=1):
             url = '{0}{1}'.format(m3u8_obj.base_uri, segment['uri'])
             
         if not verify_video_link(url, timeout=timeout):
-            return False
+            return False # first occurring bad one declares this whole list bad. Is that a good choice?
+        
+        counter+=1
+        if counter>=check_first_N_only:
+            msg='OK: skipping tests of remaining {0} entries because we have {1} good files already in this playlist'
+            nice_print(msg.format(len(m3u8_obj.data['segments'])-counter, counter), indent=indent, debug=False)
+            return True
 
     return True
 
