@@ -94,7 +94,10 @@ def verify_playlist_link(url, timeout, indent=1, check_first_N_only=5):
         return False
 
     for nested_playlist in m3u8_obj.data['playlists']:
-        nested_url = '{0}{1}'.format(m3u8_obj.base_uri, nested_playlist['uri'])
+        if nested_playlist['uri'].startswith(('https://', 'http://')):
+            nested_url = nested_playlist['uri']
+        else:
+            nested_url = '{0}{1}'.format(m3u8_obj.base_uri, nested_playlist['uri'])
         return verify_playlist_link(nested_url, timeout=timeout, indent=indent+1)
 
     counter=0
