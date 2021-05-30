@@ -84,7 +84,11 @@ def verify_playlist_link(url, timeout, indent=1):
         return verify_playlist_link(nested_url, timeout=timeout, indent=indent+1)
 
     for segment in m3u8_obj.data['segments']:
-        url = '{0}{1}'.format(m3u8_obj.base_uri, segment['uri'])
+        if segment['uri'].startswith(('https://', 'http://')):
+            url = segment['uri']
+        else:
+            url = '{0}{1}'.format(m3u8_obj.base_uri, segment['uri'])
+            
         if verify_video_link(url, timeout=timeout):
             return True
         else:
