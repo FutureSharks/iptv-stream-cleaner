@@ -89,9 +89,7 @@ def verify_playlist_link(url, timeout, indent=1):
         else:
             url = '{0}{1}'.format(m3u8_obj.base_uri, segment['uri'])
             
-        if verify_video_link(url, timeout=timeout):
-            return True
-        else:
+        if not verify_video_link(url, timeout=timeout):
             return False
 
     return True
