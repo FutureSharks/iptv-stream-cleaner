@@ -104,3 +104,5 @@ venv.bak/
 .mypy_cache/
 
 *.m3u
+/.project
+/.pydevproject
