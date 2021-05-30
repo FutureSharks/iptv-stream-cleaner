@@ -73,6 +73,20 @@ def verify_playlist_link(url, timeout, indent=1):
         nice_print('ERROR nested playlist too deep', indent=indent)
         return False
 
+    # one nasty server 301-redirected the .m3u8 file to a .mp3 file, ouch. This catches that:
+    try:
+        m3u8_head = requests.head(url, timeout=(timeout,timeout), allow_redirects=False)
+        if 300 <= m3u8_head.status_code < 310:
+            m3u8_head2 = requests.head(url, timeout=(timeout,timeout), allow_redirects=True)
+            url_redirected=m3u8_head2.history[0].headers['Location']
+            extension = urlparse(url_redirected).path.split(".")[-1]
+            if extension not in ("m3u8", "m3u"):
+                nice_print('ERROR m3u8-playlist 30x-redirected to "{0}"-filetype. Skipping this.'.format(extension), indent=indent, debug=False)
+                return False
+    except Exception as e:
+        nice_print('ERROR loading redirected playlist: {0}'.format(str(e)[:100]), indent=indent, debug=True)
+        return False
+
     try:
         m3u8_obj = m3u8.load(url, timeout=timeout)
     except Exception as e:
@@ -172,6 +186,7 @@ def filter_streams(m3u_files, timeout):
             }
             playlist_items.append(detail)
 
+    print ('Input list has {0} entries, patience please.'.format(len(playlist_items)))
     filtered_playlist_items = [item for item in playlist_items if verify_playlist_item(item, timeout)]
     print('{0} items filtered out of {1} in total'.format(len(playlist_items) - len(filtered_playlist_items), len(playlist_items)))
     return filtered_playlist_items
