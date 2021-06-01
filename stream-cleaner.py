@@ -12,8 +12,9 @@ def parse_arguments():
     p = argparse.ArgumentParser(description='A tool to remove invalid streams from an IPTV playlist file')
     p.add_argument('-i', '--input-file', help='Path to input playlist file', nargs='+', required=True)
     p.add_argument('-o', '--output-file', help='Path to output playlist file')
+    p.add_argument('-b', '--blacklist-file', help='Path to blacklist file (one url per line file)', default="")
     p.add_argument('-d', '--debug', help='To enable debug output', action='store_true', default=False)
-    p.add_argument('-t', '--timeout', help='URL timeout in seconds', default=1)
+    p.add_argument('-t', '--timeout', help='URL timeout in seconds', default=1.0, type=float)
     return p.parse_args()
 
 
@@ -167,12 +168,25 @@ def verify_playlist_item(item, timeout):
                 return False
 
 
-def filter_streams(m3u_files, timeout):
+def filter_streams(m3u_files, timeout, blacklist_file):
     '''
     Returns filtered streams from a m3u file as a list
     '''
+    blacklist=[]
+    if blacklist_file:
+        try: 
+            with open(blacklist_file) as f:
+                content = f.readlines()
+                blacklist = [x.strip() for x in content]
+        except Exception as e:
+            print ("blacklist file issue: {0} {1}" .format(type(e), e))
+            sys.exit(1)
+        else:
+            print ("Successfully loaded {0} blacklisted urls." .format( len(blacklist)))
+    
     playlist_items = []
-
+    num_blacklisted=0
+        
     for m3u_file in m3u_files:
         try:
             with open(m3u_file) as f:
@@ -190,13 +204,19 @@ def filter_streams(m3u_files, timeout):
             raise Exception('Invalid file, no URLs')
 
         for u in url_indexes:
-            detail = {
-                'metadata': content[u - 1],
-                'url': content[u]
-            }
-            playlist_items.append(detail)
+            if content[u] in blacklist:
+                num_blacklisted+=1
+            else:
+                detail = {
+                    'metadata': content[u - 1],
+                    'url': content[u]
+                }
+                playlist_items.append(detail)
+    
+    if num_blacklisted:
+        print ('Input list already reduced by {0} items, because those urls are on the blacklist.'.format(num_blacklisted))
 
-    print ('Input list has {0} entries, patience please.'.format(len(playlist_items)))
+    print ('Input list now has {0} entries, patience please. Timeout for each test is {1} seconds.'.format(len(playlist_items), timeout))
     filtered_playlist_items = [item for item in playlist_items if verify_playlist_item(item, timeout)]
     print('{0} items filtered out of {1} in total'.format(len(playlist_items) - len(filtered_playlist_items), len(playlist_items)))
     return filtered_playlist_items
@@ -204,9 +224,9 @@ def filter_streams(m3u_files, timeout):
 
 if __name__ == '__main__':
     args = parse_arguments()
-
+    
     try:
-        filtered_playlist_items = filter_streams(args.input_file, args.timeout)
+        filtered_playlist_items = filter_streams(args.input_file, args.timeout, args.blacklist_file)
     except KeyboardInterrupt:
         print('Exiting')
         sys.exit(1)
