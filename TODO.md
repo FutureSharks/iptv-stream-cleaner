@@ -15,8 +15,8 @@
 - A progress percentage; can be done by extending `playlist_items ` with an index "detail", and the `nice_title` printing then begins with that index (same index could then also help for the multithreading results ordering).
 - Duplicates: Choose the faster/st answering source?
 
-### ideas
-Sometimes an m3u file is perfectly well formed - but Kodi still refuses to play it. That is why the `--blacklist-file` option is introduced, to filter them out manually.
+### ideas for an alternative approach
+Sometimes an m3u file is perfectly well formed - but Kodi still refuses to play it. That is why the `--blacklist-file` option is introduced ([a03aeb27](https://github.com/drandreaskrueger/iptv-stream-cleaner/commit/a03aeb276479d1c733e1b20b3429395adb79d92b)), to filter them out manually.
 
 To solve that automatically, why not simply try PLAYING each stream? Ideas for an alternative approach:
 
@@ -29,4 +29,22 @@ To solve that automatically, why not simply try PLAYING each stream? Ideas for a
     
 to kill the process, and keep that URL as good.
 
-It would be even better if there was a way to register whether the stream has already started. Perhaps begin recording the stream, and if that file has nonzero length, it means something is arriving.
+#### Does the URL actually stream something?
+
+Strategy: Begin recording the stream, and if that file has nonzero length, it means something is arriving:
+
+    rm out.ts; ffmpeg -i "$URL" -c copy out.ts
+    
+in a first process, storing the $PID. Then wait 3-10 seconds, and from a second process
+
+    kill -s QUIT $PID	
+
+then the filesize will reveal everything:
+
+    if not os.path.getsize("out.ts"):
+        print("stream bad, skipping.")
+
+Combine that with multithreading, while ordering the results by original index - and this could actually be a simpler, faster approach to reach the same goal, no?
+
+Good idea?
+    
