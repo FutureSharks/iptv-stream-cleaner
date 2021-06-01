@@ -8,7 +8,7 @@
 ## added by ak
 
 - When to return from the 'for loop'?
-  - To 'return' from a 'for loop' should happen for failure only, not for the first success already, no? See commit 'test every segment = all of them must verify, not only the first'; is the same logical error repeated in other places too? 
+  - To 'return' from a 'for loop' should happen for failure only, not for the first success already, no? See commit 'test every segment = all of them must verify, not only the first' ([523bd126a](https://github.com/drandreaskrueger/iptv-stream-cleaner/commit/523bd126a9169a7b1c5db70e54ba977b1e90743e)); is the same logical error repeated in other places too? 
   - And what if there is only 1 failure entry but 9 good URLs in the same file? Perhaps failing also needs a threshold counter? Or does Kodi fail with the first failed entry already?
   - Think longer about that problem. Sometimes m3u8 playlists simply contain several different resolutions ('#EXT-X-STREAM-INF:BANDWIDTH=...') and if one of them fails, that's not really such a big issue, no? So perhaps another condition could be: At least one success per playlist? Opinions?
 - As each entry can be checked independently from all others, multithreading would help. Perhaps a multithreading Queue with a small number of workers (to not start 700 threads in one go); however the original order of entries must survive in the output file.
