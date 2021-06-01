@@ -93,6 +93,10 @@ def verify_playlist_link(url, timeout, indent=1, check_first_N_only=5):
     except Exception as e:
         nice_print('ERROR loading playlist: {0}'.format(str(e)[:100]), indent=indent, debug=True)
         return False
+    
+    if 0 == len(m3u8_obj.data['playlists']) + len(m3u8_obj.data['segments']):
+        nice_print('ERROR: playlist is empty.', indent=indent, debug=True)
+        return False 
 
     for nested_playlist in m3u8_obj.data['playlists']:
         if nested_playlist['uri'].startswith(('https://', 'http://')):
