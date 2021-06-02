@@ -12,8 +12,9 @@ def parse_arguments():
     p = argparse.ArgumentParser(description='A tool to remove invalid streams from an IPTV playlist file')
     p.add_argument('-i', '--input-file', help='Path to input playlist file', nargs='+', required=True)
     p.add_argument('-o', '--output-file', help='Path to output playlist file')
+    p.add_argument('-b', '--blacklist-file', help='Path to blacklist file (one url per line file)', default="")
     p.add_argument('-d', '--debug', help='To enable debug output', action='store_true', default=False)
-    p.add_argument('-t', '--timeout', help='URL timeout in seconds', default=1)
+    p.add_argument('-t', '--timeout', help='URL timeout in seconds', default=1.0, type=float)
     return p.parse_args()
 
 
@@ -35,7 +36,7 @@ def nice_print(message, colour=None, indent=0, debug=False):
 
 def verify_video_link(url, timeout, indent=1):
     '''
-    Verfifies a video stream link works
+    Verifies a video stream link works
     '''
     nice_print('Loading video: {0}'.format(url), indent=indent, debug=True)
 
@@ -64,7 +65,7 @@ def verify_video_link(url, timeout, indent=1):
             return False
 
 
-def verify_playlist_link(url, timeout, indent=1):
+def verify_playlist_link(url, timeout, indent=1, check_first_N_only=5):
     '''
     '''
     nice_print('Loading playlist: {0}'.format(url), indent=indent, debug=True)
@@ -73,22 +74,52 @@ def verify_playlist_link(url, timeout, indent=1):
         nice_print('ERROR nested playlist too deep', indent=indent)
         return False
 
+    # one nasty server 301-redirected the .m3u8 file to a .mp3 file, ouch. This catches that:
+    try:
+        m3u8_head = requests.head(url, timeout=(timeout,timeout), allow_redirects=False)
+        if 300 <= m3u8_head.status_code < 310:
+            m3u8_head2 = requests.head(url, timeout=(timeout,timeout), allow_redirects=True)
+            url_redirected=m3u8_head2.history[0].headers['Location']
+            extension = urlparse(url_redirected).path.split(".")[-1]
+            if extension not in ("m3u8", "m3u"):
+                nice_print('ERROR m3u8-playlist 30x-redirected to "{0}"-filetype. Skipping this.'.format(extension), indent=indent, debug=False)
+                return False
+    except Exception as e:
+        nice_print('ERROR loading redirected playlist: {0}'.format(str(e)[:100]), indent=indent, debug=True)
+        return False
+
     try:
         m3u8_obj = m3u8.load(url, timeout=timeout)
     except Exception as e:
         nice_print('ERROR loading playlist: {0}'.format(str(e)[:100]), indent=indent, debug=True)
         return False
+    
+    if 0 == len(m3u8_obj.data['playlists']) + len(m3u8_obj.data['segments']):
+        nice_print('ERROR: playlist is empty.', indent=indent, debug=True)
+        return False 
 
     for nested_playlist in m3u8_obj.data['playlists']:
-        nested_url = '{0}{1}'.format(m3u8_obj.base_uri, nested_playlist['uri'])
+        if nested_playlist['uri'].startswith(('https://', 'http://')):
+            nested_url = nested_playlist['uri']
+        else:
+            nested_url = '{0}{1}'.format(m3u8_obj.base_uri, nested_playlist['uri'])
         return verify_playlist_link(nested_url, timeout=timeout, indent=indent+1)
 
+    counter=0
     for segment in m3u8_obj.data['segments']:
-        url = '{0}{1}'.format(m3u8_obj.base_uri, segment['uri'])
-        if verify_video_link(url, timeout=timeout):
-            return True
+        if segment['uri'].startswith(('https://', 'http://')):
+            url = segment['uri']
         else:
-            return False
+            url = '{0}{1}'.format(m3u8_obj.base_uri, segment['uri'])
+            
+        if not verify_video_link(url, timeout=timeout):
+            return False # first occurring bad one declares this whole list bad. Is that a good choice?
+        
+        counter+=1
+        if counter>=check_first_N_only:
+            msg='OK: skipping tests of remaining {0} entries because we have {1} good files already in this playlist'
+            nice_print(msg.format(len(m3u8_obj.data['segments'])-counter, counter), indent=indent, debug=False)
+            return True
 
     return True
 
@@ -141,12 +172,25 @@ def verify_playlist_item(item, timeout):
                 return False
 
 
-def filter_streams(m3u_files, timeout):
+def filter_streams(m3u_files, timeout, blacklist_file):
     '''
     Returns filtered streams from a m3u file as a list
     '''
+    blacklist=[]
+    if blacklist_file:
+        try: 
+            with open(blacklist_file) as f:
+                content = f.readlines()
+                blacklist = [x.strip() for x in content]
+        except Exception as e:
+            print ("blacklist file issue: {0} {1}" .format(type(e), e))
+            sys.exit(1)
+        else:
+            print ("Successfully loaded {0} blacklisted urls." .format( len(blacklist)))
+    
     playlist_items = []
-
+    num_blacklisted=0
+        
     for m3u_file in m3u_files:
         try:
             with open(m3u_file) as f:
@@ -164,12 +208,19 @@ def filter_streams(m3u_files, timeout):
             raise Exception('Invalid file, no URLs')
 
         for u in url_indexes:
-            detail = {
-                'metadata': content[u - 1],
-                'url': content[u]
-            }
-            playlist_items.append(detail)
+            if content[u] in blacklist:
+                num_blacklisted+=1
+            else:
+                detail = {
+                    'metadata': content[u - 1],
+                    'url': content[u]
+                }
+                playlist_items.append(detail)
+    
+    if num_blacklisted:
+        print ('Input list already reduced by {0} items, because those urls are on the blacklist.'.format(num_blacklisted))
 
+    print ('Input list now has {0} entries, patience please. Timeout for each test is {1} seconds.'.format(len(playlist_items), timeout))
     filtered_playlist_items = [item for item in playlist_items if verify_playlist_item(item, timeout)]
     print('{0} items filtered out of {1} in total'.format(len(playlist_items) - len(filtered_playlist_items), len(playlist_items)))
     return filtered_playlist_items
@@ -177,9 +228,9 @@ def filter_streams(m3u_files, timeout):
 
 if __name__ == '__main__':
     args = parse_arguments()
-
+    
     try:
-        filtered_playlist_items = filter_streams(args.input_file, args.timeout)
+        filtered_playlist_items = filter_streams(args.input_file, args.timeout, args.blacklist_file)
     except KeyboardInterrupt:
         print('Exiting')
         sys.exit(1)
