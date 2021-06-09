@@ -14,6 +14,7 @@
 - As each entry can be checked independently from all others, multithreading would help. Perhaps a multithreading Queue with a small number of workers (to not start 700 threads in one go); however the original order of entries must survive in the output file.
 - A progress percentage; can be done by extending `playlist_items ` with an index "detail", and the `nice_title` printing then begins with that index (same index could then also help for the multithreading results ordering).
 - Duplicates: Choose the faster/st answering source?
+- Printing config: `--errors-only` to suppress any OK message. Better then do not even show the (name, URL) line for those OK entries. Purpose: A practical logfile for reporting back to IPTV.m3u repos. Example: [kodinerds-iptv](https://github.com/jnk22/kodinerds-iptv/issues/421)
 
 ### ideas for an alternative approach
 Sometimes an m3u file is perfectly well formed - but Kodi still refuses to play it. That is why the `--blacklist-file` option is introduced ([a03aeb27](https://github.com/drandreaskrueger/iptv-stream-cleaner/commit/a03aeb276479d1c733e1b20b3429395adb79d92b)), to filter them out manually.
