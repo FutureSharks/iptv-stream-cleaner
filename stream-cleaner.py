@@ -118,7 +118,7 @@ def verify_playlist_link(url, timeout, indent=1, check_first_N_only=5):
         counter+=1
         if counter>=check_first_N_only:
             msg='OK: skipping tests of remaining {0} entries because we have {1} good files already in this playlist'
-            nice_print(msg.format(len(m3u8_obj.data['segments'])-counter, counter), indent=indent, debug=False)
+            nice_print(msg.format(len(m3u8_obj.data['segments'])-counter, counter), indent=indent, debug=True)
             return True
 
     return True
